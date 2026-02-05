@@ -1,0 +1,81 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# Database / Data
+# =========================
+data/database.db
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# =========================
+# Input / Output files
+# =========================
+input/pdfs/*
+processed/*
+failed/*
+reports/charts/*
+reports/exports/*
+
+# Keep folders but not files
+!.gitkeep
+
+# =========================
+# Logs
+# =========================
+logs/*
+*.log
+
+# =========================
+# OCR / PDF temp files
+# =========================
+*.tmp
+*.bak
+*.swp
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDEs / Editors
+# =========================
+.vscode/
+.idea/
+*.iml
+
+# =========================
+# Jupyter (if ever used)
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Coverage / Tests
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
+
+# =========================
+# Packaging
+# =========================
+*.spec
