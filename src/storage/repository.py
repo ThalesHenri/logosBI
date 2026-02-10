@@ -4,13 +4,19 @@ from config import DB_PATH
 
 class DatabaseRepository:
     def __init__(self):
+        self.conn = None
+        self.cursor = None
+    def connect(self):
         self.conn = sqlite3.connect(DB_PATH)
         self.conn.row_factory = sqlite3.Row
-
+        self.cursor = self.conn.cursor()
+    def close(self):
+        self.conn.close()
+    
     def create_schema(self):
-        cursor = self.conn.cursor()
+        
 
-        cursor.execute("""
+        self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS documents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT NOT NULL,
@@ -22,7 +28,7 @@ class DatabaseRepository:
         );
         """)
 
-        cursor.execute("""
+        self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS emitentes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             razao_social TEXT NOT NULL,
@@ -31,7 +37,7 @@ class DatabaseRepository:
         );
         """)
 
-        cursor.execute("""
+        self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS clientes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             razao_social TEXT NOT NULL,
@@ -39,15 +45,12 @@ class DatabaseRepository:
             documento TEXT UNIQUE,
             telefone TEXT,
             email TEXT,
-            endereco TEXT,
-            bairro TEXT,
-            cep TEXT,
-            cidade TEXT,
-            uf TEXT
+            endereco TEXT
+           
         );
         """)
 
-        cursor.execute("""
+        self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS pedidos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             document_id INTEGER NOT NULL,
@@ -71,7 +74,7 @@ class DatabaseRepository:
         );
         """)
 
-        cursor.execute("""
+        self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS itens_pedido (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pedido_id INTEGER NOT NULL,
@@ -85,12 +88,12 @@ class DatabaseRepository:
         );
         """)
 
-        cursor.execute("""
+        self.cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_pedidos_data
         ON pedidos(data_venda);
         """)
 
-        cursor.execute("""
+        self.cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_itens_pedido_pedido
         ON itens_pedido(pedido_id);
         """)
@@ -140,10 +143,6 @@ class DatabaseRepository:
         telefone = dados.get("telefone")
         email = dados.get("email")
         endereco = dados.get("endereco")
-        bairro = dados.get("bairro")
-        cep = dados.get("cep")
-        cidade = dados.get("cidade")
-        uf = dados.get("uf")
         if not documento:
             raise ValueError("Clientes sem documentos não podem ser cadastrados")
         
@@ -162,19 +161,109 @@ class DatabaseRepository:
                 documento,
                 telefone,
                 email,
-                endereco,
-                bairro,
-                cep,
-                cidade,
-                uf
-            ) VALUES (?,?,?,?,?,?,?,?,?,?)
-        """,(razao_social,nome_fantasia,documento,telefone,email,endereco,bairro,cep,cidade,uf))
+                endereco
+            ) VALUES (?,?,?,?,?,?)
+        """,(razao_social,nome_fantasia,documento,telefone,email,endereco))
         self.conn.commit()
         return self.cursor.lastrowid
     
     
     def insert_pedido(self,dados):
-        pass
-    
-    def close(self):
-        self.conn.close()
+        #extrair as variaveis de dados
+        document_id = dados.get("document_id")
+        emitente_id = dados.get("emitente_id")
+        cliente_id = dados.get("cliente_id")
+        
+        numero_pedido = dados.get("numero_pedido")
+        data_venda = dados.get("data_venda")
+        condicao_pagamento = dados.get("condicao_pagamento")
+        
+        total_sem_impostos = dados.get("total_sem_impostos")
+        ipi = dados.get("ipi")
+        st = dados.get("st")
+        frete = dados.get("frete")
+        desconto_total = dados.get("desconto_total")
+        total_final = dados.get("total_final")
+        
+        quantidade_itens = dados.get("quantidade_itens")
+        peso_liquido = dados.get("peso_liquido")
+        peso_total = dados.get("peso_total")
+        
+        self.cursor.execute("""
+                            
+            INSERT INTO pedidos(
+                document_id,
+                emitente_id,
+                cliente_id,
+                numero_pedido,
+                data_venda,
+                condicao_pagamento,
+                total_sem_impostos,
+                total_ipi,
+                total_st,
+                total_frete,
+                desconto_total,
+                total_final,
+                quantidade_itens,
+                peso_liquido,
+                peso_total
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)              
+            """,(
+                document_id,
+                emitente_id,
+                cliente_id,
+                numero_pedido,
+                data_venda,
+                condicao_pagamento,
+                total_sem_impostos,
+                ipi,
+                st,
+                frete,
+                desconto_total,
+                total_final,
+                quantidade_itens,
+                peso_liquido,
+                peso_total,
+            ))
+        
+        self.conn.commit()
+        return self.cursor.lastrowid
+                            
+                            
+    def insert_itens_pedido(self,pedido_id, itens):
+        #extrai os dados
+        if not itens:
+            raise ValueError("Pedido sem itens")
+        for item in itens:
+            codigo_produto = item.get("codigo_produto")
+            descricao = item.get("descricao")
+            quantidade = item.get("quantidade")
+            valor_unitario = item.get("valor_unitario")
+            valor_total = item.get("valor_total")
+            percentual_desconto = item.get("percentual_desconto")
+            valor_total = item.get("valor_total")
+            
+            self.cursor.execute("""
+            INSERT INTO itens_pedido(
+                pedido_id,
+                codigo_produto,
+                descricao,
+                quantidade,
+                valor_unitario,
+                percentual_desconto,
+                valor_total
+            ) VALUES (?,?,?,?,?,?,?)
+            """,(
+                pedido_id,
+                codigo_produto,
+                descricao,
+                quantidade,
+                valor_unitario,
+                percentual_desconto,
+                valor_total
+            ))
+            
+        self.conn.commit()
+        
+        # insere no banco
+        
