@@ -4,4 +4,5 @@ class AppState:
     cliente = None
     emitente = None
     repository = None
+    pipeline = None
     itens = []

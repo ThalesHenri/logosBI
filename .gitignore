@@ -28,11 +28,12 @@ data/*.sqlite3
 # =========================
 # Input / Output files
 # =========================
-input/pdfs/*
+input/*
 processed/*
 failed/*
 reports/charts/*
 reports/exports/*
+
 
 # Keep folders but not files
 !.gitkeep

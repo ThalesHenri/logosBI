@@ -31,7 +31,8 @@ class BaseNormalizer:
     @staticmethod
     def to_float(value:str) -> float:
         try:
-            return float(value.strip().replace(",", "."))
+            clean_value = str(value).strip().replace(".", "").replace(",", ".")
+            return float(clean_value)
         except Exception as e:
             print(f"Erro ao converter '{value}' para float: {e}")
             return 0.0
@@ -39,49 +40,60 @@ class BaseNormalizer:
     @staticmethod
     def to_int(value:str) -> int:
         try:
-            return int(value.strip())
+            clean_value = str(value).strip().replace(".", "").replace(",", ".")
+            return int(float(clean_value))
         except Exception as e:
             print(f"Erro ao converter '{value}' para int: {e}")
             return 0
         
         
     @staticmethod
-    def clean_text(value:str) -> str:
+    def _clean_text(value:str) -> str:
+        palavras_indesejadas = [
+            "R$",
+            "\n",
+            "\t",
+            "Comprador:",
+            "Vendedor:",
+            "Indústria:",]
+        for palavra in palavras_indesejadas:
+            value = value.replace(palavra, "")
+            
         return value.strip() if value else ""
     
     
 class PedidoNormalizer(BaseNormalizer):
     def normalize(self, pedido_raw:dict)->dict:
         return {
-            "numero_pedido": self.clean_text(pedido_raw.get("numero_pedido", "")),
+            "numero_pedido": self._clean_text(pedido_raw.get("numero_pedido", "")),
             "data_venda": self.to_date(pedido_raw.get("data_venda", "")),
-            "condicao_pagamento": self.clean_text(pedido_raw.get("condicao_pagamento", "")),
+            "condicao_pagamento": self._clean_text(pedido_raw.get("condicao_pagamento", "")),
         }
         
 class ClienteNormalizer(BaseNormalizer):
     def normalize(self, cliente_raw:dict)->dict:
         return {
-            "razao_social": self.clean_text(cliente_raw.get("razao_social", "")),
-            "documento": self.clean_text(cliente_raw.get("documento", "")),
-            "nome_fantasia": self.clean_text(cliente_raw.get("nome_fantasia", "")),
-            "endereco": self.clean_text(cliente_raw.get("endereco", "")),
-            "telefone": self.clean_text(cliente_raw.get("telefone", "")),
-            "email": self.clean_text(cliente_raw.get("email", "")),
+            "razao_social": self._clean_text(cliente_raw.get("razao_social", "")),
+            "documento": self._clean_text(cliente_raw.get("documento", "")),
+            "nome_fantasia": self._clean_text(cliente_raw.get("nome_fantasia", "")),
+            "endereco": self._clean_text(cliente_raw.get("endereco", "")),
+            "telefone": self._clean_text(cliente_raw.get("telefone", "")),
+            "email": self._clean_text(cliente_raw.get("email", "")),
         }
         
 class EmitenteNormalizer(BaseNormalizer):
     def normalize(self, emitente_raw:dict)->dict:
         return {
-            "razao_social": self.clean_text(emitente_raw.get("razao_social", "")),
-            "cnpj": self.clean_text(emitente_raw.get("cnpj", "")),
+            "razao_social": self._clean_text(emitente_raw.get("razao_social", "")),
+            "cnpj": self._clean_text(emitente_raw.get("cnpj", "")),
         }
         
         
 class ItemNormalizer(BaseNormalizer):
     def normalize(self, item_raw:dict)->dict:
         return {
-            "codigo": self.clean_text(item_raw.get("codigo", "")),
-            "descricao": self.clean_text(item_raw.get("descricao", "")),
+            "codigo": self._clean_text(item_raw.get("codigo", "")),
+            "descricao": self._clean_text(item_raw.get("descricao", "")),
             "quantidade": self.to_int(item_raw.get("quantidade", "0")),
             "valor_unitario": self.to_float(item_raw.get("valor_unitario", "0")),
             "percentual_desconto": self.to_float(item_raw.get("percentual_desconto", "0")),

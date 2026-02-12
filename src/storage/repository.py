@@ -101,20 +101,23 @@ class DatabaseRepository:
         self.conn.commit()
 
     
-    def insert_document(self,filename,numero_pedido=None,status='PROCESSED',erro=None):
-        #sem passar a origem, vai ser o default sempre
-        self.cursor.execute(
-        """
-        INSERT INTO documents(
-            filename,
-            numero_pedido,
-            status,
-            erro
-        ) VALUES (?,?,?,?)
+    def get_or_create_document(self,filename:str, status:str, numero_pedido:str=None, erro:str=None)->int:
+        #faz uma consulta para verificar se o documento já existe
+        self.cursor.execute("""
+            SELECT id FROM documents WHERE filename = ?
+        """,(filename,))
+        row = self.cursor.fetchone()
+        if row:
+            return row['id']
+        
+        self.cursor.execute("""
+            INSERT INTO documents(filename,numero_pedido,status,erro) 
+            VALUES (?,?,?,?)
         """,(filename,numero_pedido,status,erro))
         self.conn.commit()
         return self.cursor.lastrowid
     
+
     def get_or_create_emitente(self,razao_social,cnpj,tabela_preco=None):
         #verificar se ja exiteste emitentes com esse cnpj
         self.cursor.execute("""
@@ -168,29 +171,19 @@ class DatabaseRepository:
         return self.cursor.lastrowid
     
     
-    def insert_pedido(self,dados):
-        #extrair as variaveis de dados
-        document_id = dados.get("document_id")
-        emitente_id = dados.get("emitente_id")
-        cliente_id = dados.get("cliente_id")
-        
+    def get_or_create_pedido(self, dados):
         numero_pedido = dados.get("numero_pedido")
-        data_venda = dados.get("data_venda")
-        condicao_pagamento = dados.get("condicao_pagamento")
-        
-        total_sem_impostos = dados.get("total_sem_impostos")
-        ipi = dados.get("ipi")
-        st = dados.get("st")
-        frete = dados.get("frete")
-        desconto_total = dados.get("desconto_total")
-        total_final = dados.get("total_final")
-        
-        quantidade_itens = dados.get("quantidade_itens")
-        peso_liquido = dados.get("peso_liquido")
-        peso_total = dados.get("peso_total")
+        if not numero_pedido:
+            raise ValueError("Pedidos sem número não podem ser cadastrados")
         
         self.cursor.execute("""
-                            
+           SELECT id FROM pedidos WHERE numero_pedido = ? 
+        """,(numero_pedido,))
+        row = self.cursor.fetchone()
+        if row:
+            return row['id'], False
+        
+        self.cursor.execute("""
             INSERT INTO pedidos(
                 document_id,
                 emitente_id,
@@ -203,31 +196,24 @@ class DatabaseRepository:
                 total_st,
                 total_frete,
                 desconto_total,
-                total_final,
-                quantidade_itens,
-                peso_liquido,
-                peso_total
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)              
-            """,(
-                document_id,
-                emitente_id,
-                cliente_id,
-                numero_pedido,
-                data_venda,
-                condicao_pagamento,
-                total_sem_impostos,
-                ipi,
-                st,
-                frete,
-                desconto_total,
-                total_final,
-                quantidade_itens,
-                peso_liquido,
-                peso_total,
-            ))
-        
+                total_final
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """,(
+            dados.get("document_id"),
+            dados.get("emitente_id"),
+            dados.get("cliente_id"),
+            numero_pedido,
+            dados.get("data_venda"),
+            dados.get("condicao_pagamento"),
+            dados.get("total_sem_impostos"),
+            dados.get("total_ipi"),
+            dados.get("total_st"),
+            dados.get("total_frete"),
+            dados.get("desconto_total"),
+            dados.get("total_final")
+        ))
         self.conn.commit()
-        return self.cursor.lastrowid
+        return (self.cursor.lastrowid, True)
                             
                             
     def insert_itens_pedido(self,pedido_id, itens):
@@ -267,3 +253,98 @@ class DatabaseRepository:
         
         # insere no banco
         
+    
+    def listar_pedidos(self):
+        query = """
+        SELECT 
+            p.id,
+            p.numero_pedido,
+            c.razao_social AS cliente,
+            p.total_final,
+            p.data_venda,
+            p.total_sem_impostos
+        FROM pedidos p
+        JOIN clientes c ON p.cliente_id = c.id
+        ORDER BY p.data_venda DESC
+        """
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
+    
+    
+    def listar_itens_pedido(self, pedido_id):
+        query = """
+        SELECT 
+            codigo_produto,
+            descricao,
+            quantidade,
+            valor_unitario,
+            percentual_desconto,
+            valor_total
+        FROM itens_pedido
+        WHERE pedido_id = ?
+        """
+        self.cursor.execute(query, (pedido_id,))
+        return self.cursor.fetchall()
+        
+        
+    def obter_metricas_dashboard(self)->dict:
+        """Faz uma consulta ao banco de dados para ober os dados necessarios para o dashboard. 
+        Idealmente, o repositório deve retornar um dicionário organizado com as seguintes chaves:
+        - geral: dict com os KPIs principais (faturamento_total, total_pedidos, total_itens)
+        - evolucao: lista de dicts com a evolução diária do faturamento (dia, faturamento, qtd_pedidos)
+        - clientes: lista de dicts com os top clientes (cliente, total)
+
+        Returns:
+            dict: _description_
+        """
+    
+    
+    # 1. Query do Faturamento
+        query_evolucao = """
+        SELECT 
+            date(data_venda) as dia,
+            SUM(total_final) AS faturamento,
+            COUNT(id) AS qtd_pedidos
+        FROM pedidos
+        GROUP BY dia
+        ORDER BY dia ASC
+        """
+        
+        # 2. Query de Top Clientes (Para o gráfico de barras)
+       
+        query_clientes = """
+        SELECT c.razao_social as cliente, SUM(total_final) as total
+        FROM pedidos 
+        JOIN clientes c ON pedidos.cliente_id = c.id
+        GROUP BY c.id, c.razao_social
+        ORDER BY total DESC
+        LIMIT 5
+        """
+
+        # 3. Query de Totais (Para os Cards de KPI)
+        query_totais = """
+        SELECT 
+            SUM(total_final) as faturamento_total,
+            COUNT(id) as total_pedidos,
+            (SELECT SUM(quantidade) FROM itens_pedido) as total_itens
+        FROM pedidos
+        """
+
+        # Execução
+        self.cursor.execute(query_evolucao)
+        evolucao = [dict(row) for row in self.cursor.fetchall()]
+        
+        self.cursor.execute(query_clientes)
+        clientes = [dict(row) for row in self.cursor.fetchall()]
+        
+        self.cursor.execute(query_totais)
+        linha_total = self.cursor.fetchone()
+        totais = dict(linha_total) if linha_total else {}
+
+        # Retornamos um único dicionário organizado
+        return {
+            "geral": totais,
+            "evolucao": evolucao,
+            "clientes": clientes
+        }
+    

@@ -7,6 +7,9 @@
 """
 import pdfplumber
 import re
+from logger import LoggerMaker
+
+logger = LoggerMaker().get_logger()
 
 class PedidoPDFExtractor:
     def __init__(self,pdf_path):
@@ -130,39 +133,55 @@ class PedidoPDFExtractor:
      
     
     #validação de item
-    def _is_item_valid(self,item) -> bool:
+    def _is_item_valid(self, item) -> bool:
         try:
-            # numeracao precisa ser inteiro puro
-            if not item["numeracao"].isdigit():
+            # 1. Função auxiliar interna para converter números com segurança
+            def parse_num(val):
+                if not val: return 0.0
+                # Remove pontos de milhar e troca vírgula por ponto
+                limpo = str(val).replace('.', '').replace(',', '.')
+                try: return float(limpo)
+                except: return 0.0
+
+            # 2. Extração e Limpeza dos campos
+            numeracao = item.get("numeracao", "").strip()
+            codigo = item.get("codigo", "").strip()
+            descricao = item.get("descricao", "").strip()
+            
+            qtd = parse_num(item.get("quantidade", "0"))
+            vu = parse_num(item.get("valor_unitario", "0"))
+            total = parse_num(item.get("valor_total", "0"))
+
+            # 3. CRITÉRIOS DE VALIDAÇÃO FLEXÍVEIS:
+            
+            # A - Descrição é o coração do item. Se não houver texto, não é um produto.
+            if not descricao or len(descricao) < 3:
                 return False
 
-            # codigo precisa ser inteiro
-            if not item["codigo"].isdigit():
+            # B - Se não tem quantidade nem valor total, provavelmente é ruído do PDF
+            if qtd <= 0 and total <= 0:
                 return False
 
-            # descrição obrigatória e não numérica
-            descricao = item["descricao"].strip()
-            if not descricao or descricao.replace(",", "").replace(".", "").isdigit():
+            # C - Verificação de Código/Numeração: 
+            # Em vez de isdigit(), apenas removemos sujeira. 
+            # Se sobrar algo, consideramos válido.
+            if not any(char.isdigit() for char in (numeracao + codigo)):
+                # Se não tem nem número nem código, pode ser uma linha de observação
                 return False
 
-            # quantidade > 0
-            qtd = float(item["quantidade"].replace(",", "."))
-            if qtd <= 0:
-                return False
-
-            # valor unitário > 0
-            vu = float(item["valor_unitario"].replace(",", "."))
-            if vu <= 0:
-                return False
-
-            # total coerente
-            total = float(item["valor_total"].replace(",", "."))
-            if round(qtd * vu, 2) != round(total, 2):
-                return False
+            # D - CONSISTÊNCIA (Opcional): 
+            # Em vez de travar o processo, apenas logamos se o total estiver estranho,
+            # mas permitimos que o item entre (confiamos no total impresso no PDF).
+            if vu > 0 and qtd > 0:
+                calculado = round(qtd * vu, 2)
+                diferenca = abs(calculado - round(total, 2))
+                if diferenca > 0.05: # Tolera 5 centavos de erro de arredondamento
+                    logger.warning(f"Divergência de centavos no item {codigo}: Calc {calculado} vs PDF {total}")
 
             return True
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"Erro crítico na validação de item: {e}")
             return False
 
         

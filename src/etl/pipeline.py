@@ -3,6 +3,7 @@ from .extractor import PedidoPDFExtractor
 from storage.repository import DatabaseRepository
 from config import PATH_INPUT
 from logger import LoggerMaker
+from ui.state import AppState
 import os
 from .normalizer import *
 
@@ -56,34 +57,81 @@ class PedidoPipeline:
             razao_social=emitente["razao_social"],
             cnpj=emitente["cnpj"],
         )
+
+        
+        
         dados_pedido = {
             "cliente_id": cliente_db,
-            "document_id": self.repository.insert_document(
-                filename=pdf_path.name,
-                numero_pedido=pedido["numero_pedido"],
-                status="PROCESSED",
-            ),
+            "document_id": self.repository.get_or_create_document(filename=pdf_path.name,status="PROCESSED", numero_pedido=pedido["numero_pedido"]),
             "emitente_id": emitente_db,
             "numero_pedido": pedido["numero_pedido"],
             "data_venda": pedido["data_venda"],
             "condicao_pagamento": pedido["condicao_pagamento"],
-            "total_sem_impostos": float(total["total_sem_impostos"]),
+            "total_sem_impostos": total["total_sem_impostos"],
             "ipi": total["ipi"],
             "st": total["st"],
             "frete": total["frete"],
             "desconto_total": total["desconto_total"],
             "total_final": float(total["total_final"]),
         }
-        pedido_db = self.repository.insert_pedido(
-            dados=dados_pedido
-        )
+        pedido_db, created = self.repository.get_or_create_pedido(
+                dados=dados_pedido
+            )
 
-        self.repository.insert_itens_pedido(
-            pedido_id=pedido_db,
-            itens=itens,
-        )
+        if created:
+            self.repository.insert_itens_pedido(pedido_db, itens)
+            
 
         self.logger.info(
             f"PDF {pdf_path.name} processado com sucesso "
             f"(Pedido {pedido['numero_pedido']})"
         )
+    
+    def listar_pedidos(self)->dict:
+        pedidos = self.repository.listar_pedidos()
+        pipeline = PedidoPipeline(self.repository)
+        AppState.pipeline = pipeline
+        return pedidos 
+        
+        
+    def gerar_dashboard_data(self):
+        try:
+            res = self.repository.obter_metricas_dashboard()
+            
+            # Pega os totais para os KPIs
+            geral = res.get('geral', {})
+            faturamento = geral.get('faturamento_total', 0) or 0
+            pedidos = geral.get('total_pedidos', 0) or 0
+            itens = geral.get('total_itens', 0) or 0
+
+            kpis = {
+                "faturamento_total": faturamento,
+                "total_pedidos": pedidos,
+                "ticket_medio": faturamento / pedidos if pedidos > 0 else 0,
+                "ipt": itens / pedidos if pedidos > 0 else 0,
+                "pmi": faturamento / itens if itens > 0 else 0
+            }
+
+            # Organiza os dados para os gráficos
+            graficos = {
+                "faturamento_diario": res.get('evolucao', []),
+                "top_clientes": res.get('clientes', [])
+            }
+
+            return kpis, graficos
+        except Exception as e:
+            self.logger.error(f"Erro: {e}")
+            return {}, {"faturamento_diario": [], "top_clientes": []}
+
+    def _retorno_vazio(self):
+        return {
+            "faturamento_total": 0.0,
+            "total_pedidos": 0,
+            "ticket_medio": 0.0,
+            "ipt": 0.0,
+            "pmi": 0.0
+        }
+            
+            
+    
+            
