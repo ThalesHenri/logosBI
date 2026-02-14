@@ -1,11 +1,12 @@
 from pathlib import Path
 from .extractor import PedidoPDFExtractor
 from storage.repository import DatabaseRepository
-from config import PATH_INPUT
+from config import PATH_INPUT, DB_PATH, PATH_FAILED
 from logger import LoggerMaker
 from ui.state import AppState
 import os
 from .normalizer import *
+import shutil
 
 class PedidoPipeline:
     def __init__(self,repository: DatabaseRepository):
@@ -35,6 +36,7 @@ class PedidoPipeline:
                 self.logger.exception(
                     f"Erro ao processar o PDF {pdf_path.name}"
                 )
+                self._mover_pdf_failed(pdf_path,PATH_FAILED )
 
     def _processar_pdf(self, pdf_path: Path):
         self.logger.info(f"Iniciando processamento do PDF: {pdf_path.name}")
@@ -86,6 +88,25 @@ class PedidoPipeline:
             f"PDF {pdf_path.name} processado com sucesso "
             f"(Pedido {pedido['numero_pedido']})"
         )
+        
+    def _mover_pdf_failed(self, pdf_path: Path,failed: Path)->None:
+        """Move os pdf que falharem na extração para a pasta 'Failed'
+
+        Args:
+            pdf_path (Path): Caminho do pdf
+            failed (Path): Caminho do pdf em caso de falha na extração
+        """
+        self.logger.info(f"Movendo PDF {pdf_path.name} para pasta de falhas")
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d")
+        destino = failed / f"{timestamp}_{pdf_path.name}"
+        
+        try:
+            shutil.move(pdf_path, destino)
+            self.logger.info(f"PDF {pdf_path.name}com falha na extração movido para {destino}")
+        except Exception as e:
+            self.logger.error(f"Erro ao mover o PDF {pdf_path.name}: {e}")
+       
     
     def listar_pedidos(self)->dict:
         pedidos = self.repository.listar_pedidos()
@@ -132,6 +153,38 @@ class PedidoPipeline:
             "pmi": 0.0
         }
             
+            
+    def export_and_erase_db(self)->None:
+        """
+        Esta função precisa:
+        - exportar o banco de dados e salva-lo com o nome 'Dados de {mes}'.
+        - Salvar-lo em uma pasta chamada 'backup'.
+        - criar um novo banco de dados e defini-lo como principal'
+        """
+        
+        nome_pasta = 'backup'
+        os.makedirs(nome_pasta, exist_ok=True,)
+        mes_atual = datetime.now().strftime('%m')
+        nome_db = f'Dados_do_mes_{mes_atual}'
+        path_backup = os.path.join(nome_pasta, f'{nome_db}.db')
+        
+        
+        try:
+            self.logger.info(f'Iniciando fechamento de mês. Destino: {path_backup}')
+            self.repository.close()
+            
+            if os.path.exists:
+                shutil.copy2(DB_PATH, path_backup)
+                print(f'Backup criado com sucesso: {nome_db}')
+                self.logger.info(f'Backup criado com sucesso: {nome_db}')
+
+                os.remove(DB_PATH)
+                print(f'Arquivo {DB_PATH} removido com sucesso.')
+                self.repository.connect()
+                self.repository.create_schema()
+                self.logger.info(f'Arquivo {DB_PATH} removido com sucesso.')
+        except Exception as e:
+            self.logger.error(f'Erro ao exportar o banco de dados: {e}')
             
     
             

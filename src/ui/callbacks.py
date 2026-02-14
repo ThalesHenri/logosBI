@@ -5,6 +5,7 @@ from etl.pipeline import PedidoPipeline
 import dearpygui.dearpygui as dpg
 
 
+
 logger = LoggerMaker().get_logger()
 class Callbacks:
     
@@ -126,4 +127,10 @@ class Callbacks:
         """
         user_data2 = {"titulo": titulo, "texto": texto}
         main_window.botao_ajuda(sender,app_data,user_data=user_data2)
+    
+    
+    @staticmethod
+    def exportar_dados(sender, app_data, user_data)->None:
+        pipeline = AppState.pipeline
+        pipeline.export_and_erase_db()
         

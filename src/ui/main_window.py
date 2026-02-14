@@ -1,6 +1,7 @@
 import dearpygui.dearpygui as dpg
 from .callbacks import Callbacks
 from logger import LoggerMaker
+import os
 
 logger = LoggerMaker().get_logger()
 
@@ -15,6 +16,7 @@ class MainWindow:
         """
         self.label = label
         self.tag = tag
+        self._setup_fonts()
         self.build()
 
     def build(self) -> None:
@@ -40,48 +42,72 @@ class MainWindow:
 
         dpg.set_primary_window(self.tag, True)
 
+        
+    def _setup_fonts(self): # <--- NOVA FUNÇÃO: REGISTRO DE FONTES
+        """Configura a tipografia do sistema"""
+        with dpg.font_registry():
+            # Tenta carregar uma fonte do sistema (Windows como padrão, Linux como fallback)
+            # Se você tiver um arquivo .ttf na pasta do projeto, use o caminho dele aqui.
+            font_path = "C:/Windows/Fonts/consolas.ttf" # Windows
+            if not os.path.exists(font_path):
+                font_path = "/usr/share/fonts/truetype/msttcorefonts/consola.ttf" #Linux
+
+            if os.path.exists(font_path):
+                # 20 é o tamanho da fonte. Aumente aqui se desejar ainda maior.
+                self.default_font = dpg.add_font(font_path, 50, tag="default_font") 
+                dpg.bind_font(self.default_font)
+                logger.info(f"Fonte carregada com sucesso: {font_path}")
+            else:
+                logger.warning("Fonte do sistema não encontrada. Usando escala global como fallback.")
+                dpg.set_global_font_scale(1.8) # Aumenta 20% a fonte padrão se não achar arquivo
     # =========================
     # 📊 DASHBOARD COMPONENTS
     # =========================
     def _dashboard_view(self)->None:
+        dpg.add_spacer(height=20) # Aumentado de 10 para 20
         
-
-        dpg.add_spacer(height=10)
-        
-        # --- SEÇÃO DE KPIs (Cards Rápidos) ---
         with dpg.group(horizontal=True):
-            dpg.add_button(label="Atualizar Dashboard", callback=Callbacks.atualizar_dashboard,user_data={"main_window": self, "aba_ativa": "tag_dashboard"}, width=150)
+            # Botão agora precisa de quase o dobro de largura para não cortar o texto
+            dpg.add_button(label="Atualizar Dashboard", 
+                           callback=Callbacks.atualizar_dashboard,
+                           user_data={"main_window": self, "aba_ativa": "tag_dashboard"}, 
+                           width=300) # <--- AUMENTADO de 180 para 300
             dpg.add_button(
                 label="?",
                 callback=Callbacks.kpi_ajuda,
-                user_data={"main_window": self}
+                user_data={"main_window": self},
+                width=50 # <--- AUMENTADO para o botão "?" não ficar minúsculo
             )
-            dpg.add_separator
         
+        # --- SEÇÃO DE KPIs (Cards Gigantes para Escala 2.0) ---
         with dpg.group(horizontal=True):
-            with dpg.child_window(width=200, height=80, border=True):
+            # Aumentado largura de 230 para 350 e altura de 90 para 150
+            card_width = 350
+            card_height = 150
+            
+            with dpg.child_window(width=card_width, height=card_height, border=True):
                 dpg.add_text("Total Pedidos")
                 dpg.add_text("0", tag="kpi_total_pedidos", color=[0, 255, 0])
             
-            with dpg.child_window(width=200, height=80, border=True):
+            with dpg.child_window(width=card_width, height=card_height, border=True):
                 dpg.add_text("Faturamento Total")
                 dpg.add_text("R$ 0.00", tag="kpi_faturamento_total", color=[0, 255, 0])
 
-            with dpg.child_window(width=200, height=80, border=True):
+            with dpg.child_window(width=card_width, height=card_height, border=True):
                 dpg.add_text("Ticket Médio")
                 dpg.add_text("R$ 0.00", tag="kpi_ticket_medio", color=[0, 255, 0])
 
-            with dpg.child_window(width=200, height=80, border=True):
+            with dpg.child_window(width=card_width, height=card_height, border=True):
                 dpg.add_text("IPT")
-                dpg.add_text(" Itens / Pedido: 0.00", tag="kpi_ipt", color=[0, 255, 0])
+                dpg.add_text("Itens/Pedido: 0.00", tag="kpi_ipt", color=[0, 255, 0])
 
-            with dpg.child_window(width=200, height=80, border=True):
+            with dpg.child_window(width=card_width, height=card_height, border=True):
                 dpg.add_text("PMI")
                 dpg.add_text("R$ 0.00", tag="kpi_pmi", color=[0, 255, 0])
 
-        dpg.add_spacer(height=20)
+        dpg.add_spacer(height=40) # Mais respiro entre seções
         dpg.add_separator()
-        dpg.add_spacer(height=10)
+        dpg.add_spacer(height=20)
 
         # --- GRÁFICO DE TENDÊNCIA ---
         dpg.add_text("Tendência de Faturamento Diário", bullet=True)
@@ -90,7 +116,7 @@ class MainWindow:
             callback=Callbacks.faturamento_ajuda,
             user_data={"main_window": self}
         )
-        with dpg.plot(label="Faturamento por Dia", height=400, width=-1, tag="dashboard_plot"):
+        with dpg.plot(label="Faturamento por Dia", height=600, width=-1, tag="dashboard_plot"):
             dpg.add_plot_legend()
             
             # Eixo X (Tempo/Dias)
@@ -151,15 +177,16 @@ class MainWindow:
 
         if not itens:
             return
-
+        n = 1
         for item_bruto in itens:
             item = dict(item_bruto) if hasattr(item_bruto, "keys") else item_bruto
             with dpg.table_row(parent="itens_pedidos_table"):
-                dpg.add_text(str(item.get("codigo", ""))) # Chave corrigida conforme seu normalizer
+                dpg.add_text(str(n))
                 dpg.add_text(str(item.get("descricao", "")))
                 dpg.add_text(str(item.get("quantidade", "")))
                 dpg.add_text(f"R$ {float(item.get('valor_unitario', 0)):.2f}")
                 dpg.add_text(f"R$ {float(item.get('valor_total', 0)):.2f}")
+                n += 1
 
     # Método para atualizar os gráficos e KPIs
     def atualizar_dashboard_ui(self, dados_kpi: dict, dados_grafico: list):
@@ -232,8 +259,10 @@ class MainWindow:
         dpg.add_text("LogosBI - Business Intelligence para Pedidos", tag="header_text")
         dpg.add_spacer(height=5)
         with dpg.group(horizontal=True):
-            dpg.add_button(label="Importar PDFs", callback=Callbacks.importar_pdf, width=150)
-            dpg.add_button(label="Atualizar Dados", callback=Callbacks.dados_gerados, user_data=self, width=150)
+            dpg.add_button(label="Importar PDFs", callback=Callbacks.importar_pdf, width=250)
+            dpg.add_button(label="Atualizar Dados", callback=Callbacks.dados_gerados, user_data=self, width=250)
+            dpg.add_button(label="Exportar Dados", callback=Callbacks.exportar_dados, width=250)
+
         dpg.add_spacer(height=10)
         dpg.add_separator()
 
@@ -252,7 +281,7 @@ class MainWindow:
         dpg.add_text("Itens do Pedido Selecionado", color=[200, 200, 200])
         with dpg.table(tag="itens_pedidos_table", header_row=True, resizable=True, row_background=True,
                        borders_innerH=True, borders_outerH=True, height=-1):  
-            dpg.add_table_column(label="Código")
+            dpg.add_table_column(label="Item")
             dpg.add_table_column(label="Descrição")
             dpg.add_table_column(label="Qtd")
             dpg.add_table_column(label="V. Unit")
